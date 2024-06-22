@@ -1,79 +1,100 @@
-// import { json } from "body-parser"
-import express from "express"
-// importando biblioteca prisma com banco de dados 
-import { PrismaClient } from '@prisma/client'
+import express from "express";
+import cors from 'cors';
+import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
+const app = express();
 
-const app = express()
-app.use(express.json())
+app.use(express.json());
+app.use(cors());
 
+// Criar um novo usuário
 app.post('/usuarios', async (req, res) => {
-    // enviando para banco de dados 
-    // await fala que o javascript deve esperar receber as informaçoes
-    await prisma.user.create({
-        data: {
-            email: req.body.email,
-            name: req.body.name,
-            age: req.body.age
-        }
-    })
-
-    res.status(201).json(req.body)
-})
-
-app.get('/usuarios', async (req, res) => {
-    let users=[]
-    if(req.query){
-        // filtro de usuarios 
-        users= await prisma.user.findMany({
-            where:{
-                name: req.query.name,
-                email:req.query.email,
-                age:age.query.age
-
+    try {
+        const novoUsuario = await prisma.user.create({
+            data: {
+                email: req.body.email,
+                name: req.body.name,
+                age: req.body.age
             }
-        })
-    } else{
-        const users = await prisma.user.findMany()
+        });
+        res.status(201).json(novoUsuario);
+    } catch (error) {
+        console.error('Erro ao criar usuário:', error);
+        res.status(500).json({ error: 'Erro ao criar usuário', detalhes: error.message });
     }
+});
 
-    res.status(200).json(users)
-})
-
-app.put('/usuarios/:id', async (req, res) => {
-    // alterando para banco de dados 
-    await prisma.user.update({
-        where: {
-            // informaçoes que vai dar acesso a editar
-            id: req.params.id
-        },
-        data: {
-            email: req.body.email,
-            name: req.body.name,
-            age: req.body.age
+// Listar todos os usuários ou filtrar usuários
+app.get('/usuarios', async (req, res) => {
+    try {
+        let usuarios;
+        if (Object.keys(req.query).length > 0) {
+            usuarios = await prisma.user.findMany({
+                where: {
+                    ...(req.query.name && { name: req.query.name }),
+                    ...(req.query.email && { email: req.query.email }),
+                    ...(req.query.age && { age: parseInt(req.query.age) })
+                }
+            });
+        } else {
+            usuarios = await prisma.user.findMany();
         }
-    })
+        res.status(200).json(usuarios);
+    } catch (error) {
+        console.error('Erro ao buscar usuários:', error);
+        res.status(500).json({ error: 'Erro ao buscar usuários', detalhes: error.message });
+    }
+});
 
-    res.status(201).json(req.body)
-})
+// Atualizar um usuário existente
+app.put('/usuarios/:id', async (req, res) => {
+    try {
+        const usuarioAtualizado = await prisma.user.update({
+            where: {
+                id: req.params.id // id como String
+            },
+            data: {
+                email: req.body.email,
+                name: req.body.name,
+                age: req.body.age
+            }
+        });
+        res.status(200).json(usuarioAtualizado);
+    } catch (error) {
+        console.error('Erro ao atualizar usuário:', error);
+        res.status(500).json({ error: 'Erro ao atualizar usuário', detalhes: error.message });
+    }
+});
 
-// excluindo um usuario
+// Excluir um usuário
 app.delete('/usuarios/:id', async (req, res) => {
-    await prisma.user.delete({
-        where: {
-            id:(req.params.id) 
-        },
-    })
+    try {
+        const id = req.params.id; // id como String
 
-    res.status(200).json({ message: 'Usuário deletado com sucesso!' })
-})
+        // Verificar se o usuário existe antes de deletar
+        const usuarioExistente = await prisma.user.findUnique({ where: { id } });
 
-app.listen(3000)
+        if (!usuarioExistente) {
+            console.warn(`Usuário com ID ${id} não encontrado para exclusão`);
+            return res.status(404).json({ error: 'Usuário não encontrado' });
+        }
 
-// Criar API de usuarios
+        // Tentar excluir o usuário
+        const usuarioDeletado = await prisma.user.delete({
+            where: {
+                id: id
+            }
+        });
 
-// -criar  um usuario
-// -listar todos usuarios
-// -editar os usuarios
-// -deletar usuarios
+        console.log(`Usuário com ID ${id} deletado:`, usuarioDeletado);
+        res.status(200).json({ message: 'Usuário deletado com sucesso!' });
+    } catch (error) {
+        console.error('Erro ao deletar usuário:', error);
+        res.status(500).json({ error: 'Erro ao deletar usuário', detalhes: error.message });
+    }
+});
+
+app.listen(3000, () => {
+    console.log('Servidor rodando em http://localhost:3000');
+});
